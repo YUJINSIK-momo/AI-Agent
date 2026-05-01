@@ -1,0 +1,92 @@
+1) Claude Code 설치 → 2) 프로젝트 규칙 정의(CLAUDE.md) → 3) 필요하면 Skills 추가 → 4) 큰 구조는 Claude, 세밀 수정은 Cursor
+
+CLAUDE.md로 프로젝트별 지침을 주는 방식이 공식적으로 안내. Skills도 SKILL.md 파일로 확장
+
+Claude Code
+프로젝트의 첫 틀
+폴더 구조 제안
+아키텍처 정리
+공통 규칙 반영
+여러 파일 동시 수정
+
+Cursor
+세밀한 코드 수정
+UI 다듬기
+특정 파일 빠른 편집
+디버깅/자동완성
+
+Claude Code를 설치하고
+프로젝트에 **CLAUDE.md**를 만들고
+필요할 때 **skills 폴더와 SKILL.md**를 추가
+
+예시)
+React + Express + DB + Slack/LINE + WooCommerce API 라면,
+
+먼저 CLAUDE.md에 들어갈 내용
+기술 스택
+폴더 구조 원칙
+API 레이어 분리 규칙
+서비스/리포지토리 패턴
+DB 접근 방식
+네이밍 규칙
+응답 형식 규칙
+UI 컴포넌트 규칙
+금지사항
+
+Claude Code 실행 후 프롬포트 
+“초기 폴더 구조 만들어줘”
+“auth / crm / attendance 모듈 기준으로 Express 구조 나눠줘”
+“React 프론트와 API 서버 연결 구조 잡아줘”
+
+Cursor = 손
+Claude Code = 뇌
+
+claude - 실행 커맨드
+
+command not found: claude
+→ npm global 설치 안됨
+로그인 안됨
+→ claude login 필요
+권한 문제
+→ npm config set prefix ~/.npm-global
+
+npm install -g @anthropic-ai/claude-codeclaude 
+
+# 1. find-skills
+npx skills add evgyur/find-skills
+
+# 2. Vercel React Best Practices
+npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-best-practices
+
+# 3. Web Design Guidelines
+npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines
+
+# 4. Frontend Design
+npx skills add https://github.com/vercel-labs/agent-eval --skill frontend-design
+
+로컬 실행
+npm run dev:backend
+npm run dev:frontend
+
+마이그래이션 실행
+cd backend
+npx prisma migrate deploy
+
+프론트 빌드
+cd "C:\Users\user\Desktop\Claude Code\frontend"
+npm run build
+
+백엔드 빌드
+cd "C:\Users\user\Desktop\Claude Code\backend"
+npx prisma generate
+npm run build
+
+github 푸쉬
+git status
+git add .
+git commit -m "DB 연동은 추후에 진행하기 위한 작업 mock"
+git push origin main
+
+
+JSON 생성: backend 폴더에서 npx ts-node src/scripts/parseWordpressXml.ts
+ npx ts-node src/scripts/csvMergeToJson.ts

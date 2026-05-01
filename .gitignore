@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# env (절대 올리지 않음)
+.env
+backend/.env
+frontend/.env
+
+# build output
+dist/
+frontend/dist/
+backend/dist/
+
+# vite cache
+frontend/.vite/
+frontend/node_modules/.vite/
+
+# Claude Code internal
+.agents/
+.claude/
+
+# misc
+.DS_Store
+*.log
