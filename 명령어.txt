@@ -84,7 +84,7 @@ npm run build
 github 푸쉬
 git status
 git add .
-git commit -m "DB 연동은 추후에 진행하기 위한 작업 mock"
+git commit -m "PAGES 권한 설정"
 git push origin main
 
 
