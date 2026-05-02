@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import {
-  Search, Send, Sparkles, GitBranch, Zap, Users, Code2, Bug,
+  Search, Send, Sparkles, GitBranch, Users, Code2, Bug,
   BarChart3, Megaphone, Headphones, Settings2, Crown, Boxes, Clock3, Loader2,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
