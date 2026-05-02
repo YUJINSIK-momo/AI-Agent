@@ -13,19 +13,19 @@ import { OfficeMiniMap } from "@/components/OfficeMiniMap"
 import { loadCompanySettings, formatCompanyContextForAgents } from "@/lib/companySettings"
 
 const agents = [
-  { id: "ceo",       name: "CEO",       kr: "대표",       icon: Crown,      desc: "최종 의사결정 / 승인",        active: true },
-  { id: "cpo",       name: "CPO",       kr: "제품 총괄",  icon: Boxes,      desc: "제품 방향 / 우선순위",        active: true },
-  { id: "cto",       name: "CTO",       kr: "기술 총괄",  icon: GitBranch,  desc: "GitHub 코드 분석 / 리뷰",     active: true },
-  { id: "pm",        name: "PM",        kr: "기획",       icon: Users,      desc: "기획서 / MVP / 요구사항",     active: true },
-  { id: "dev",       name: "Developer", kr: "개발자",     icon: Code2,      desc: "구현 / 코드 작성",            active: true },
-  { id: "qa",        name: "QA",        kr: "테스트",     icon: Bug,        desc: "버그 / 테스트 케이스",        active: false },
-  { id: "data",      name: "Data",      kr: "데이터 분석", icon: BarChart3, desc: "지표 / 전환율 / 리포트",      active: false },
-  { id: "marketing", name: "Marketing", kr: "마케팅",     icon: Megaphone,  desc: "콘텐츠 / 브랜딩",            active: false },
-  { id: "cs",        name: "CS",        kr: "고객 대응",  icon: Headphones, desc: "FAQ / 일본어 응대",           active: false },
-  { id: "ops",       name: "Ops",       kr: "자동화",     icon: Settings2,  desc: "운영 플로우 / 자동화",        active: false },
+  { id: "ceo",       name: "CEO",       kr: "대표",       icon: Crown,      desc: "최종 의사결정 / 승인",        hint: "어떤 결정이 필요하세요?" },
+  { id: "cpo",       name: "CPO",       kr: "제품 총괄",  icon: Boxes,      desc: "제품 방향 / 우선순위",        hint: "제품 방향이나 기능 우선순위 얘기해봐요." },
+  { id: "cto",       name: "CTO",       kr: "기술 총괄",  icon: GitBranch,  desc: "GitHub 코드 분석 / 리뷰",     hint: "코드 리뷰가 필요하면 GitHub 분석을 실행하거나 질문하세요." },
+  { id: "pm",        name: "PM",        kr: "기획",       icon: Users,      desc: "기획서 / MVP / 요구사항",     hint: "기획하고 싶은 기능이나 아이디어를 던져봐요." },
+  { id: "dev",       name: "Developer", kr: "개발자",     icon: Code2,      desc: "구현 / 코드 작성",            hint: "구현하고 싶은 기능이나 버그를 알려줘요." },
+  { id: "qa",        name: "QA",        kr: "테스트",     icon: Bug,        desc: "버그 / 테스트 케이스",        hint: "테스트가 필요한 기능이나 버그를 설명해줘요." },
+  { id: "data",      name: "Data",      kr: "데이터 분석", icon: BarChart3, desc: "지표 / 전환율 / 리포트",      hint: "분석이 필요한 지표나 데이터를 알려줘요." },
+  { id: "marketing", name: "Marketing", kr: "마케팅",     icon: Megaphone,  desc: "콘텐츠 / 브랜딩",            hint: "어떤 콘텐츠나 마케팅 전략이 필요하세요?" },
+  { id: "cs",        name: "CS",        kr: "고객 대응",  icon: Headphones, desc: "FAQ / 일본어 응대",           hint: "고객 응대 문구나 FAQ를 작성해드릴게요." },
+  { id: "ops",       name: "Ops",       kr: "자동화",     icon: Settings2,  desc: "운영 플로우 / 자동화",        hint: "자동화하고 싶은 업무나 프로세스를 알려줘요." },
 ] as const
 
-const API_BASE = import.meta.env.VITE_API_BASE as string || "http://localhost:4000"
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:4000"
 
 function generateSessionId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
@@ -50,7 +50,7 @@ async function saveAgentReport(agentId: string, content: string, reportType: str
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content, reportType }),
-  }).catch(() => { /* DB 저장 실패는 조용히 무시 */ })
+  }).catch(() => {})
 }
 
 interface Message {
@@ -59,42 +59,42 @@ interface Message {
   text: string
 }
 
-interface SidebarStatus {
-  status: string
-  repoName: string
-  outputCount: number
-}
-
 type RightPanelTab = "office_map" | "report"
 
 export default function AIAgentDashboard() {
   const sessionId = useRef(generateSessionId()).current
   const companyContext = useRef(formatCompanyContextForAgents(loadCompanySettings())).current
-  const [selected, setSelected] = useState<AgentId>("cto")
+  const [selected, setSelected] = useState<AgentId>("pm")
   const [rightTab, setRightTab] = useState<RightPanelTab>("office_map")
   const [input, setInput] = useState("")
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "agent", agent: "cto", text: "안녕하세요. [실행] 버튼을 눌러 GitHub Repository를 분석합니다." },
-  ])
+  const [messagesByAgent, setMessagesByAgent] = useState<Partial<Record<AgentId, Message[]>>>({})
   const [loading, setLoading] = useState(false)
-  const [sidebar, setSidebar] = useState<SidebarStatus>({
-    status: "대기 중",
-    repoName: "-",
-    outputCount: 0,
-  })
+  const [outputCount, setOutputCount] = useState(0)
+  const [repoName, setRepoName] = useState("-")
+  const [workflowStatus, setWorkflowStatus] = useState("대기 중")
 
-  const currentAgent = useMemo(() => agents.find((a) => a.id === selected), [selected])
+  const currentAgent = useMemo(() => agents.find((a) => a.id === selected)!, [selected])
+  const messages = messagesByAgent[selected] ?? []
 
-  const addAgentMessage = (text: string) => {
-    setMessages((prev) => [...prev, { role: "agent", agent: selected, text }])
-    setSidebar((prev) => ({ ...prev, outputCount: prev.outputCount + 1 }))
+  const addAgentMessage = (agentId: AgentId, text: string) => {
+    setMessagesByAgent((prev) => ({
+      ...prev,
+      [agentId]: [...(prev[agentId] ?? []), { role: "agent", agent: agentId, text }],
+    }))
+    setOutputCount((n) => n + 1)
+  }
+
+  const addUserMessage = (agentId: AgentId, text: string) => {
+    setMessagesByAgent((prev) => ({
+      ...prev,
+      [agentId]: [...(prev[agentId] ?? []), { role: "user", agent: agentId, text }],
+    }))
   }
 
   const runCtoAnalysis = async () => {
     setLoading(true)
-    setSidebar((prev) => ({ ...prev, status: "분석 중..." }))
-    addAgentMessage("GitHub Repository 분석을 시작합니다...")
-
+    setWorkflowStatus("분석 중...")
+    addAgentMessage("cto", "GitHub Repository 분석을 시작합니다...")
     try {
       const [repo, commits, tree] = await Promise.all([
         githubApi.repo(),
@@ -102,36 +102,30 @@ export default function AIAgentDashboard() {
         githubApi.tree(),
       ])
       const report = formatCtoReport(repo, commits, tree)
-      addAgentMessage(report)
-      setSidebar({ status: "분석 완료", repoName: repo.full_name, outputCount: sidebar.outputCount + 2 })
+      addAgentMessage("cto", report)
+      setRepoName(repo.full_name)
+      setWorkflowStatus("분석 완료")
       void saveAgentReport("cto", report, "github-analysis")
     } catch (err) {
-      addAgentMessage(`분석 실패: ${err instanceof Error ? err.message : "백엔드 서버를 확인해주세요."}`)
-      setSidebar((prev) => ({ ...prev, status: "오류 발생" }))
+      addAgentMessage("cto", `분석 실패: ${err instanceof Error ? err.message : "오류가 발생했습니다."}`)
+      setWorkflowStatus("오류 발생")
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleRun = () => {
-    if (selected === "cto") {
-      void runCtoAnalysis()
-    } else {
-      void sendMessage("지금 역할에 맞는 업무 브리핑을 해줘")
     }
   }
 
   const sendMessage = async (overrideText?: string) => {
     const text = overrideText ?? input.trim()
     if (!text) return
+    const agentId = selected
     if (!overrideText) setInput("")
-    setMessages((prev) => [...prev, { role: "user", agent: selected, text }])
+    addUserMessage(agentId, text)
     setLoading(true)
     try {
-      const reply = await callAgent(selected, text, sessionId, companyContext || undefined)
-      addAgentMessage(reply)
+      const reply = await callAgent(agentId, text, sessionId, companyContext || undefined)
+      addAgentMessage(agentId, reply)
     } catch (err) {
-      addAgentMessage(`오류: ${err instanceof Error ? err.message : "백엔드 서버를 확인해주세요."}`)
+      addAgentMessage(agentId, `연결 오류: ${err instanceof Error ? err.message : "백엔드 서버를 확인해주세요."}`)
     } finally {
       setLoading(false)
     }
@@ -161,7 +155,7 @@ export default function AIAgentDashboard() {
           <div className="mb-5 grid grid-cols-3 gap-3">
             <StatusBox label="DAY" value="1" />
             <StatusBox label="TIME" value={new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} />
-            <StatusBox label="OUTPUT" value={String(sidebar.outputCount)} />
+            <StatusBox label="OUTPUT" value={String(outputCount)} />
           </div>
 
           <div className="relative mb-5">
@@ -176,6 +170,7 @@ export default function AIAgentDashboard() {
             {agents.map((agent, i) => {
               const Icon = agent.icon
               const isSelected = selected === agent.id
+              const hasMessages = (messagesByAgent[agent.id]?.length ?? 0) > 0
               return (
                 <motion.button
                   key={agent.id}
@@ -191,7 +186,7 @@ export default function AIAgentDashboard() {
                 >
                   <div className="mb-3 flex items-center justify-between">
                     <Icon size={20} className={isSelected ? "text-amber-300" : "text-white/55"} />
-                    <span className={`h-2 w-2 rounded-full ${agent.active ? "bg-emerald-400" : "bg-white/20"}`} />
+                    <span className={`h-2 w-2 rounded-full ${hasMessages ? "bg-emerald-400" : "bg-white/20"}`} />
                   </div>
                   <div className="text-sm font-bold">{agent.name}</div>
                   <div className="mt-1 text-xs text-white/45">{agent.kr}</div>
@@ -206,19 +201,21 @@ export default function AIAgentDashboard() {
           <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
             <div>
               <p className="text-xs text-white/40">Agent Workspace</p>
-              <h2 className="text-xl font-bold">{currentAgent?.kr} 사무실</h2>
+              <h2 className="text-xl font-bold">{currentAgent.kr} 사무실</h2>
             </div>
-            <Button
-              onClick={handleRun}
-              disabled={loading}
-              className="rounded-xl bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-60"
-            >
-              {loading ? (
-                <><Loader2 size={16} className="mr-2 animate-spin" /> 분석 중</>
-              ) : (
-                <><Zap size={16} className="mr-2" /> 실행</>
-              )}
-            </Button>
+            {selected === "cto" && (
+              <Button
+                onClick={() => void runCtoAnalysis()}
+                disabled={loading}
+                className="rounded-xl bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-60"
+              >
+                {loading ? (
+                  <><Loader2 size={16} className="mr-2 animate-spin" /> 분석 중</>
+                ) : (
+                  <><GitBranch size={16} className="mr-2" /> GitHub 분석</>
+                )}
+              </Button>
+            )}
           </header>
 
           <section className="flex-1 overflow-y-auto p-6">
@@ -226,36 +223,44 @@ export default function AIAgentDashboard() {
               <CardContent className="p-6">
                 <div className="mb-6 flex items-start gap-4">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-300">
-                    {currentAgent && <currentAgent.icon size={26} />}
+                    <currentAgent.icon size={26} />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-bold">{currentAgent?.name}</h3>
-                    <p className="mt-1 text-white/55">{currentAgent?.desc}</p>
+                    <h3 className="text-2xl font-bold">{currentAgent.name}</h3>
+                    <p className="mt-1 text-white/55">{currentAgent.desc}</p>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  {messages.slice(-20).map((msg, idx) => (
-                    <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                          msg.role === "user"
-                            ? "bg-amber-500 text-black"
-                            : "bg-white/8 text-white/80"
-                        }`}
-                      >
-                        {msg.text}
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 py-10 text-center text-white/30">
+                    <currentAgent.icon size={32} />
+                    <p className="text-sm">{currentAgent.hint}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {messages.slice(-30).map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                            msg.role === "user"
+                              ? "bg-amber-500 text-black"
+                              : "bg-white/8 text-white/80"
+                          }`}
+                        >
+                          {msg.text}
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                {loading && (
+                  <div className="mt-3 flex justify-start">
+                    <div className="flex items-center gap-2 rounded-2xl bg-white/8 px-4 py-3 text-sm text-white/50">
+                      <Loader2 size={14} className="animate-spin" /> 생각 중...
                     </div>
-                  ))}
-                  {loading && (
-                    <div className="flex justify-start">
-                      <div className="flex items-center gap-2 rounded-2xl bg-white/8 px-4 py-3 text-sm text-white/50">
-                        <Loader2 size={14} className="animate-spin" /> GitHub 데이터 불러오는 중...
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </section>
@@ -265,14 +270,14 @@ export default function AIAgentDashboard() {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") void sendMessage() }}
-                placeholder="한 줄 명령을 내려주세요. 팀이 알아서 일합니다."
+                onKeyDown={(e) => { if (e.key === "Enter" && !loading) void sendMessage() }}
+                placeholder={`${currentAgent.kr}에게 메시지를 입력하세요...`}
                 className="border-0 bg-transparent text-white placeholder:text-white/35 focus-visible:ring-0"
               />
               <Button
                 onClick={() => void sendMessage()}
-                disabled={loading}
-                className="rounded-xl bg-amber-500 text-black hover:bg-amber-400"
+                disabled={loading || !input.trim()}
+                className="rounded-xl bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-40"
               >
                 <Send size={17} />
               </Button>
@@ -315,24 +320,17 @@ export default function AIAgentDashboard() {
               <OfficeMiniMap
                 highlightId={selected}
                 onSelectAgent={setSelected}
-                outputCount={sidebar.outputCount}
-                workflowStatus={sidebar.status}
+                outputCount={outputCount}
+                workflowStatus={workflowStatus}
               />
             ) : (
               <>
                 <h3 className="mb-4 text-sm font-bold text-white/70">Agent Report</h3>
                 <div className="space-y-3">
-                  <ReportItem title="현재 선택 Agent" value={currentAgent?.name ?? "-"} />
-                  <ReportItem
-                    title="상태"
-                    value={sidebar.status}
-                    highlight={sidebar.status === "분석 완료"}
-                  />
-                  <ReportItem
-                    title="연동"
-                    value={selected === "cto" ? "GitHub API 연결됨" : "내부 Agent"}
-                  />
-                  <ReportItem title="Repository" value={sidebar.repoName} />
+                  <ReportItem title="현재 선택 Agent" value={currentAgent.name} />
+                  <ReportItem title="상태" value={workflowStatus} highlight={workflowStatus === "분석 완료"} />
+                  <ReportItem title="연동" value={selected === "cto" ? "GitHub API" : "Claude AI"} />
+                  <ReportItem title="Repository" value={repoName} />
                 </div>
 
                 <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
