@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { githubApi, formatCtoReport } from "@/lib/github"
 import type { AgentId } from "@/lib/officeLayout"
 import { OfficeMiniMap } from "@/components/OfficeMiniMap"
+import { loadCompanySettings, formatCompanyContextForAgents } from "@/lib/companySettings"
 
 const agents = [
   { id: "ceo",       name: "CEO",       kr: "대표",       icon: Crown,      desc: "최종 의사결정 / 승인",        active: true },
@@ -30,11 +31,11 @@ function generateSessionId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-async function callAgent(agentId: string, message: string, sessionId: string): Promise<string> {
+async function callAgent(agentId: string, message: string, sessionId: string, companyContext?: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/agent/${agentId}/message`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, sessionId }),
+    body: JSON.stringify({ message, sessionId, companyContext }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string }
@@ -42,6 +43,14 @@ async function callAgent(agentId: string, message: string, sessionId: string): P
   }
   const data = await res.json() as { reply: string }
   return data.reply
+}
+
+async function saveAgentReport(agentId: string, content: string, reportType: string): Promise<void> {
+  await fetch(`${API_BASE}/api/agent/${agentId}/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, reportType }),
+  }).catch(() => { /* DB 저장 실패는 조용히 무시 */ })
 }
 
 interface Message {
@@ -60,6 +69,7 @@ type RightPanelTab = "office_map" | "report"
 
 export default function AIAgentDashboard() {
   const sessionId = useRef(generateSessionId()).current
+  const companyContext = useRef(formatCompanyContextForAgents(loadCompanySettings())).current
   const [selected, setSelected] = useState<AgentId>("cto")
   const [rightTab, setRightTab] = useState<RightPanelTab>("office_map")
   const [input, setInput] = useState("")
@@ -94,6 +104,7 @@ export default function AIAgentDashboard() {
       const report = formatCtoReport(repo, commits, tree)
       addAgentMessage(report)
       setSidebar({ status: "분석 완료", repoName: repo.full_name, outputCount: sidebar.outputCount + 2 })
+      void saveAgentReport("cto", report, "github-analysis")
     } catch (err) {
       addAgentMessage(`분석 실패: ${err instanceof Error ? err.message : "백엔드 서버를 확인해주세요."}`)
       setSidebar((prev) => ({ ...prev, status: "오류 발생" }))
@@ -117,7 +128,7 @@ export default function AIAgentDashboard() {
     setMessages((prev) => [...prev, { role: "user", agent: selected, text }])
     setLoading(true)
     try {
-      const reply = await callAgent(selected, text, sessionId)
+      const reply = await callAgent(selected, text, sessionId, companyContext || undefined)
       addAgentMessage(reply)
     } catch (err) {
       addAgentMessage(`오류: ${err instanceof Error ? err.message : "백엔드 서버를 확인해주세요."}`)

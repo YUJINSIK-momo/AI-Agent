@@ -92,10 +92,15 @@ const COMMON_SUFFIX = `
 export async function askAgent(
   agentId: string,
   userMessage: string,
-  history: Array<{ role: "user" | "assistant"; content: string }> = []
+  history: Array<{ role: "user" | "assistant"; content: string }> = [],
+  companyContext?: string
 ): Promise<string> {
   const systemPrompt = SYSTEM_PROMPTS[agentId]
   if (!systemPrompt) throw new Error(`Unknown agent: ${agentId}`)
+
+  const companyBlock = companyContext?.trim()
+    ? `\n\n[회사·제품 맥락]\n${companyContext.trim()}`
+    : ""
 
   const messages = [
     ...history.slice(-6),
@@ -108,7 +113,7 @@ export async function askAgent(
     system: [
       {
         type: "text",
-        text: systemPrompt + COMMON_SUFFIX,
+        text: systemPrompt + COMMON_SUFFIX + companyBlock,
         cache_control: { type: "ephemeral" },
       },
     ],

@@ -10,7 +10,16 @@ dotenv.config()
 const app = express()
 const PORT = process.env.PORT ?? 4000
 
-app.use(cors({ origin: "http://localhost:5173" }))
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN ?? "http://localhost:5173").split(",").map((o) => o.trim())
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) callback(null, true)
+      else callback(new Error(`CORS: ${origin} is not allowed`))
+    },
+  })
+)
 app.use(express.json())
 
 app.use("/api/agent", agentRouter)
@@ -18,11 +27,7 @@ app.use("/api/github", githubRouter)
 
 app.get("/api/health", async (_req, res) => {
   const database = await checkDatabase()
-  res.json({
-    status: "ok",
-    time: new Date().toISOString(),
-    database,
-  })
+  res.json({ status: "ok", time: new Date().toISOString(), database })
 })
 
 app.listen(PORT, () => {
