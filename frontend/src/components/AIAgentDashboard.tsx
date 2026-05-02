@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import {
   Search, Send, Sparkles, GitBranch, Zap, Users, Code2, Bug,
@@ -26,11 +26,15 @@ const agents = [
 
 const API_BASE = import.meta.env.VITE_API_BASE as string || "http://localhost:4000"
 
-async function callAgent(agentId: string, message: string): Promise<string> {
+function generateSessionId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+async function callAgent(agentId: string, message: string, sessionId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/agent/${agentId}/message`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, sessionId }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string }
@@ -55,6 +59,7 @@ interface SidebarStatus {
 type RightPanelTab = "office_map" | "report"
 
 export default function AIAgentDashboard() {
+  const sessionId = useRef(generateSessionId()).current
   const [selected, setSelected] = useState<AgentId>("cto")
   const [rightTab, setRightTab] = useState<RightPanelTab>("office_map")
   const [input, setInput] = useState("")
@@ -112,7 +117,7 @@ export default function AIAgentDashboard() {
     setMessages((prev) => [...prev, { role: "user", agent: selected, text }])
     setLoading(true)
     try {
-      const reply = await callAgent(selected, text)
+      const reply = await callAgent(selected, text, sessionId)
       addAgentMessage(reply)
     } catch (err) {
       addAgentMessage(`오류: ${err instanceof Error ? err.message : "백엔드 서버를 확인해주세요."}`)

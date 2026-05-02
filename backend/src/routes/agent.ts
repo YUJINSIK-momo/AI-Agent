@@ -1,7 +1,7 @@
 import { Router } from "express"
 import type { Request, Response } from "express"
 import { askAgent } from "../lib/claude"
-import { saveMessage, getHistory } from "../lib/db"
+import { saveMessage, getHistory, saveDailyReport, getDailyReports } from "../lib/db"
 
 const router = Router()
 
@@ -10,27 +10,20 @@ const AGENT_IDS = ["ceo", "cpo", "cto", "pm", "dev", "qa", "data", "marketing", 
 // POST /api/agent/:id/message
 router.post("/:id/message", async (req: Request, res: Response) => {
   const id = req.params["id"] as string
-  const { message } = req.body as { message: string }
+  const { message, sessionId } = req.body as { message: string; sessionId?: string }
 
-  if (!message) {
-    res.status(400).json({ error: "message is required" })
-    return
-  }
-
-  if (!AGENT_IDS.includes(id)) {
-    res.status(404).json({ error: `Agent '${id}' not found` })
-    return
-  }
+  if (!message) { res.status(400).json({ error: "message is required" }); return }
+  if (!AGENT_IDS.includes(id)) { res.status(404).json({ error: `Agent '${id}' not found` }); return }
 
   try {
     let claudeHistory: Array<{ role: "user" | "assistant"; content: string }> = []
     try {
-      const history = await getHistory(id, 6)
+      const history = await getHistory(id, 6, sessionId)
       claudeHistory = history.map((h) => ({
         role: (h.role === "agent" ? "assistant" : "user") as "user" | "assistant",
         content: h.content,
       }))
-      await saveMessage(id, "user", message)
+      await saveMessage(id, "user", message, sessionId)
     } catch (dbErr) {
       console.warn(`[DB] read/write skipped:`, dbErr instanceof Error ? dbErr.message : dbErr)
     }
@@ -38,36 +31,57 @@ router.post("/:id/message", async (req: Request, res: Response) => {
     const reply = await askAgent(id, message, claudeHistory)
 
     try {
-      await saveMessage(id, "agent", reply)
+      await saveMessage(id, "agent", reply, sessionId)
     } catch (dbErr) {
       console.warn(`[DB] save reply skipped:`, dbErr instanceof Error ? dbErr.message : dbErr)
     }
 
-    res.json({
-      agent: id,
-      userMessage: message,
-      reply,
-      timestamp: new Date().toISOString(),
-    })
+    res.json({ agent: id, userMessage: message, reply, timestamp: new Date().toISOString() })
   } catch (err) {
     console.error(`[agent/${id}] error:`, err)
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal server error" })
   }
 })
 
-// GET /api/agent/:id/history
+// GET /api/agent/:id/history?limit=20&sessionId=xxx
 router.get("/:id/history", async (req: Request, res: Response) => {
   const id = req.params["id"] as string
   const limit = parseInt((req.query["limit"] as string) || "20", 10)
+  const sessionId = req.query["sessionId"] as string | undefined
 
-  if (!AGENT_IDS.includes(id)) {
-    res.status(404).json({ error: `Agent '${id}' not found` })
-    return
-  }
+  if (!AGENT_IDS.includes(id)) { res.status(404).json({ error: `Agent '${id}' not found` }); return }
 
   try {
-    const history = await getHistory(id, limit)
+    const history = await getHistory(id, limit, sessionId)
     res.json({ agent: id, history })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal server error" })
+  }
+})
+
+// POST /api/agent/:id/daily-report
+router.post("/:id/daily-report", async (req: Request, res: Response) => {
+  const id = req.params["id"] as string
+  const { content, date } = req.body as { content: string; date?: string }
+
+  if (!content) { res.status(400).json({ error: "content is required" }); return }
+  if (!AGENT_IDS.includes(id)) { res.status(404).json({ error: `Agent '${id}' not found` }); return }
+
+  try {
+    await saveDailyReport(id, content, date)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Internal server error" })
+  }
+})
+
+// GET /api/agent/daily-reports?date=2026-05-02&agentId=pm
+router.get("/daily-reports", async (req: Request, res: Response) => {
+  const date = req.query["date"] as string | undefined
+  const agentId = req.query["agentId"] as string | undefined
+  try {
+    const reports = await getDailyReports(date, agentId)
+    res.json({ reports })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Internal server error" })
   }
