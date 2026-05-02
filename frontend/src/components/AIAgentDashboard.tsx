@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { githubApi, formatCtoReport } from "@/lib/github"
+import type { AgentId } from "@/lib/officeLayout"
+import { OfficeMiniMap } from "@/components/OfficeMiniMap"
 
 const agents = [
   { id: "ceo",       name: "CEO",       kr: "대표",       icon: Crown,      desc: "최종 의사결정 / 승인",        active: true },
@@ -22,19 +24,20 @@ const agents = [
   { id: "ops",       name: "Ops",       kr: "자동화",     icon: Settings2,  desc: "운영 플로우 / 자동화",        active: false },
 ] as const
 
-type AgentId = typeof agents[number]["id"]
+const API_BASE = import.meta.env.VITE_API_BASE as string || "http://localhost:4000"
 
-const sampleReplies: Record<AgentId, string> = {
-  ceo:       "대표 권한으로 전체 Agent 보고를 취합합니다. 최종 승인 또는 보류 결정을 내려주세요.",
-  cpo:       "현재 우선순위는 1) CTO GitHub 분석, 2) QA 테스트 케이스 작성, 3) Agent UI MVP 완성입니다.",
-  cto:       "GitHub 분석을 시작하려면 우측 상단 [실행] 버튼을 눌러주세요.",
-  pm:        "MVP 범위는 Agent 카드, 채팅창, CTO GitHub 분석 버튼, 보고서 출력 영역까지로 추천합니다.",
-  dev:       "프론트는 React + shadcn/ui, 백엔드는 Node.js + Express 구조로 설계하는 것이 좋습니다.",
-  qa:        "테스트 항목: Agent 선택, 메시지 전송, CTO 실행, 응답 출력, 모바일 UI 깨짐 여부입니다.",
-  data:      "초기 지표는 Agent 실행 횟수, 성공률, 응답 시간, 사용자 승인율로 잡으면 됩니다.",
-  marketing: "콘텐츠 방향은 '혼자 운영하는 AI 회사', '10명의 AI 직원', 'GitHub 자동 코드 리뷰'가 좋습니다.",
-  cs:        "고객 대응 Agent는 일본어 LINE 문구, FAQ 정리, 클레임 답변 초안을 담당합니다.",
-  ops:       "자동화는 매일 아침 GitHub 변경사항 분석 → CTO 보고서 → QA 체크리스트 생성 흐름이 좋습니다.",
+async function callAgent(agentId: string, message: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/agent/${agentId}/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string }
+    throw new Error(err.error ?? `HTTP ${res.status}`)
+  }
+  const data = await res.json() as { reply: string }
+  return data.reply
 }
 
 interface Message {
@@ -49,8 +52,11 @@ interface SidebarStatus {
   outputCount: number
 }
 
+type RightPanelTab = "office_map" | "report"
+
 export default function AIAgentDashboard() {
   const [selected, setSelected] = useState<AgentId>("cto")
+  const [rightTab, setRightTab] = useState<RightPanelTab>("office_map")
   const [input, setInput] = useState("")
   const [messages, setMessages] = useState<Message[]>([
     { role: "agent", agent: "cto", text: "안녕하세요. [실행] 버튼을 눌러 GitHub Repository를 분석합니다." },
@@ -95,26 +101,32 @@ export default function AIAgentDashboard() {
     if (selected === "cto") {
       void runCtoAnalysis()
     } else {
-      addAgentMessage(sampleReplies[selected])
+      void sendMessage("지금 역할에 맞는 업무 브리핑을 해줘")
     }
   }
 
-  const sendMessage = () => {
-    if (!input.trim()) return
-    const text = input.trim()
+  const sendMessage = async (overrideText?: string) => {
+    const text = overrideText ?? input.trim()
+    if (!text) return
+    if (!overrideText) setInput("")
     setMessages((prev) => [...prev, { role: "user", agent: selected, text }])
-    setInput("")
-    setTimeout(() => {
-      addAgentMessage(sampleReplies[selected])
-    }, 300)
+    setLoading(true)
+    try {
+      const reply = await callAgent(selected, text)
+      addAgentMessage(reply)
+    } catch (err) {
+      addAgentMessage(`오류: ${err instanceof Error ? err.message : "백엔드 서버를 확인해주세요."}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[#07080d] text-white">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[390px_1fr_360px]">
+    <div className="flex min-h-0 w-full max-w-none flex-1 flex-col bg-[#07080d] text-white">
+      <div className="grid min-h-0 w-full flex-1 grid-cols-1 lg:grid-rows-1 lg:grid-cols-[390px_1fr_360px]">
 
         {/* Left Sidebar */}
-        <aside className="border-r border-white/10 bg-[#0c0d14] p-5">
+        <aside className="min-h-0 overflow-y-auto border-r border-white/10 bg-[#0c0d14] p-5 lg:h-full">
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-300 shadow-lg shadow-amber-500/10">
@@ -174,7 +186,7 @@ export default function AIAgentDashboard() {
         </aside>
 
         {/* Main Chat */}
-        <main className="relative flex min-h-screen flex-col bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.08),transparent_35%),#080910]">
+        <main className="relative flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.08),transparent_35%),#080910] lg:h-full lg:min-h-0">
           <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
             <div>
               <p className="text-xs text-white/40">Agent Workspace</p>
@@ -237,12 +249,12 @@ export default function AIAgentDashboard() {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                onKeyDown={(e) => { if (e.key === "Enter") void sendMessage() }}
                 placeholder="한 줄 명령을 내려주세요. 팀이 알아서 일합니다."
                 className="border-0 bg-transparent text-white placeholder:text-white/35 focus-visible:ring-0"
               />
               <Button
-                onClick={sendMessage}
+                onClick={() => void sendMessage()}
                 disabled={loading}
                 className="rounded-xl bg-amber-500 text-black hover:bg-amber-400"
               >
@@ -253,35 +265,73 @@ export default function AIAgentDashboard() {
         </main>
 
         {/* Right Sidebar */}
-        <aside className="hidden border-l border-white/10 bg-[#101116] p-5 lg:block">
-          <h3 className="mb-4 text-sm font-bold text-white/70">Agent Report</h3>
-          <div className="space-y-3">
-            <ReportItem title="현재 선택 Agent" value={currentAgent?.name ?? "-"} />
-            <ReportItem
-              title="상태"
-              value={sidebar.status}
-              highlight={sidebar.status === "분석 완료"}
-            />
-            <ReportItem
-              title="연동"
-              value={selected === "cto" ? "GitHub API 연결됨" : "내부 Agent"}
-            />
-            <ReportItem
-              title="Repository"
-              value={sidebar.repoName}
-            />
+        <aside className="hidden min-h-0 flex-col border-l border-white/10 bg-[#101116] lg:flex lg:h-full lg:w-[360px] lg:shrink-0">
+          <div className="shrink-0 space-y-3 border-b border-white/10 p-4">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-white/35">우측 패널</p>
+            <div className="flex rounded-xl border border-white/10 bg-black/35 p-0.5">
+              <button
+                type="button"
+                onClick={() => setRightTab("office_map")}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  rightTab === "office_map"
+                    ? "bg-amber-500 text-black shadow-sm"
+                    : "text-white/50 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                오피스 미니
+              </button>
+              <button
+                type="button"
+                onClick={() => setRightTab("report")}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  rightTab === "report"
+                    ? "bg-amber-500 text-black shadow-sm"
+                    : "text-white/50 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                Agent Report
+              </button>
+            </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-300">
-              <Clock3 size={16} /> Daily Workflow
-            </div>
-            <ol className="space-y-2 text-sm text-white/55">
-              <li>1. CTO GitHub 변경사항 분석</li>
-              <li>2. PM 기능 아이디어 정리</li>
-              <li>3. QA 테스트 포인트 작성</li>
-              <li>4. CPO 전체 보고서 생성</li>
-            </ol>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            {rightTab === "office_map" ? (
+              <OfficeMiniMap
+                highlightId={selected}
+                onSelectAgent={setSelected}
+                outputCount={sidebar.outputCount}
+                workflowStatus={sidebar.status}
+              />
+            ) : (
+              <>
+                <h3 className="mb-4 text-sm font-bold text-white/70">Agent Report</h3>
+                <div className="space-y-3">
+                  <ReportItem title="현재 선택 Agent" value={currentAgent?.name ?? "-"} />
+                  <ReportItem
+                    title="상태"
+                    value={sidebar.status}
+                    highlight={sidebar.status === "분석 완료"}
+                  />
+                  <ReportItem
+                    title="연동"
+                    value={selected === "cto" ? "GitHub API 연결됨" : "내부 Agent"}
+                  />
+                  <ReportItem title="Repository" value={sidebar.repoName} />
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-300">
+                    <Clock3 size={16} /> Daily Workflow
+                  </div>
+                  <ol className="space-y-2 text-sm text-white/55">
+                    <li>1. CTO GitHub 변경사항 분석</li>
+                    <li>2. PM 기능 아이디어 정리</li>
+                    <li>3. QA 테스트 포인트 작성</li>
+                    <li>4. CPO 전체 보고서 생성</li>
+                  </ol>
+                </div>
+              </>
+            )}
           </div>
         </aside>
 

@@ -90,3 +90,8 @@ git push origin main
 
 JSON 생성: backend 폴더에서 npx ts-node src/scripts/parseWordpressXml.ts
  npx ts-node src/scripts/csvMergeToJson.ts
+
+  붙이는 순서도 명확합니다:
+  1. Claude API 연동 → Agent별 system prompt 설계 → 실제 응답 생성
+  2. DB 연동 → 대화/보고서 저장
+  3. Railway 배포 → 백엔드 + DB를 외부에서 접근 가능하게

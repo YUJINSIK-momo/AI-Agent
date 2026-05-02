@@ -383,3 +383,43 @@ POST /agent/cto/push
 - 변경 파일 생성
 - commit 생성
 - push 실행
+
+
+
+## Project Overview
+
+이 프로젝트는 AI 에이전트들이 실제 사무실 공간 안에서 이동하며 업무를 수행하는  
+"Game-like AI Office System"이다.
+
+기존 텍스트 기반 Agent 시스템이 아닌  
+공간 기반 시각화 + 상태 기반 행동 시스템을 구현한다.
+
+---
+
+## Core Concept
+
+- 오피스 배경 이미지 1개 사용
+- 각 AI Agent는 캐릭터(Sprite)로 표현
+- Agent는 역할에 따라 특정 위치(Zone)에서 작업 수행
+- Agent는 상태에 따라 이동 / 정지 / 애니메이션 변화
+- 말풍선은 UI 코드로 렌더링
+
+---
+
+## Asset Structure
+
+```bash
+/public/img/
+  office_background.png
+
+  /agents/
+    ceo.png
+    cpo.png
+    cto.png
+    pm.png
+    dev.png
+    qa.png
+    data.png
+    marketing.png
+    cs.png
+    ops.png
