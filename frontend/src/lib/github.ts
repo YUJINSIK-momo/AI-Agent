@@ -29,7 +29,7 @@ export interface TreeResponse {
 const REPO_OWNER = "YUJINSIK-momo"
 const REPO_NAME = "AI-Agent"
 
-// 로컬: 백엔드 프록시 / 프로덕션(GitHub Pages): GitHub API 직접 호출
+// 로컬: 백엔드 프록시 / 프로덕션(GitHub Pages): GitHub API 직접 호출(인증 없이)
 async function get<T>(path: string): Promise<T> {
   if (import.meta.env.PROD) {
     return githubDirect<T>(path)
@@ -42,13 +42,13 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// 브라우저 번들에 넣은 값은 누구나 읽을 수 있으므로 토큰을 쓰지 않는다.
+// 공개 저장소라 인증 없이 읽히고, 한도(시간당 60회)는 방문자 IP 마다 따로 센다.
 async function githubDirect<T>(path: string): Promise<T> {
-  const token = import.meta.env.VITE_GITHUB_TOKEN as string | undefined
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
   }
-  if (token) headers["Authorization"] = `Bearer ${token}`
 
   const pathMap: Record<string, string> = {
     "/repo":    `/repos/${REPO_OWNER}/${REPO_NAME}`,
